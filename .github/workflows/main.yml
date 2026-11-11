@@ -8,12 +8,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-slim
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript-typescript']
     steps:
       - uses: actions/checkout@v4
       - name: Run a one-line script
         run: echo "Hello, world!"
         
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: autbuild
+        uses: github/codeql-action/autobuild@v4
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          languages: ${{ matrix.language }}
