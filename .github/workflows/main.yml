@@ -14,14 +14,21 @@ jobs:
       contents: read
       security-events: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        language: ['javascript-typescript']
+    # strategy:
+    #   fail-fast: false
+    #   matrix:
+    #     language: ['javascript-typescript']
     steps:
       - uses: actions/checkout@v4
       - name: Run a one-line script
         run: echo "Hello, world!"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'npm'
+          
+      - run: npm ci
         
       # - name: Initialize CodeQL
       #   uses: github/codeql-action/init@v4
