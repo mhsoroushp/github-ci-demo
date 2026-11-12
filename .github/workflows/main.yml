@@ -23,15 +23,30 @@ jobs:
       - name: Run a one-line script
         run: echo "Hello, world!"
         
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
-        with:
-          languages: ${{ matrix.language }}
+      # - name: Initialize CodeQL
+      #   uses: github/codeql-action/init@v4
+      #   with:
+      #     languages: ${{ matrix.language }}
 
-      - name: autbuild
-        uses: github/codeql-action/autobuild@v4
+      # - name: autbuild
+      #   uses: github/codeql-action/autobuild@v4
 
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v4
+      # - name: Perform CodeQL Analysis
+      #   uses: github/codeql-action/analyze@v4
+      #   with:
+      #     languages: ${{ matrix.language }}
+
+      - name: Build
+        run: |
+          echo "First line of build,"
+          echo "second line of build"
+        
+      - name: Test
+        run: echo "Test is done"
+
+      - name: Artifact upload
+        uses: actions/upload-artifact@v7
         with:
-          languages: ${{ matrix.language }}
+          name: artifact-1
+          path: | 
+           package*
