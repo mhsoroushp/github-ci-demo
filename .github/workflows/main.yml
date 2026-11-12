@@ -26,8 +26,13 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: 'npm'
-          
+          # cache: 'npm'
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}   
+      
       - run: npm ci
         
       # - name: Initialize CodeQL
@@ -51,9 +56,9 @@ jobs:
       - name: Test
         run: echo "Test is done"
 
-      - name: Artifact upload
-        uses: actions/upload-artifact@v7
-        with:
-          name: artifact-1
-          path: | 
-           package*
+      # - name: Artifact upload
+      #   uses: actions/upload-artifact@v7
+      #   with:
+      #     name: artifact-1
+      #     path: | 
+      #      package*
