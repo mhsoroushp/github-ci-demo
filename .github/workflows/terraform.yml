@@ -1,0 +1,165 @@
+name: Terraform Deploy
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "terraform/**"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "terraform/**"
+  workflow_dispatch:
+
+env:
+  TERRAFORM_VERSION: "1.7.0"
+  WORKING_DIRECTORY: "./terraform"
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    environment: dev
+    outputs:
+      tfplan_exists: ${{ steps.plan.outputs.tfplan_exists }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init
+        # working-directory: ${{ env.WORKING_DIRECTORY }}
+        # run: |
+        #   terraform init \
+        #     -backend-config="resource_group_name=${{ secrets.TERRAFORM_BACKEND_RG }}" \
+        #     -backend-config="storage_account_name=${{ secrets.TERRAFORM_BACKEND_SA }}" \
+        #     -backend-config="container_name=${{ secrets.TERRAFORM_BACKEND_CONTAINER }}" \
+        #     -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}"
+        run: echo "Skipping Terraform Init in plan stage"
+
+      - name: Terraform Format Check
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: terraform fmt -check -recursive
+        continue-on-error: true
+
+      - name: Terraform Validate
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: |
+          terraform plan -var-file="dev.tfvars" -out=tfplan -no-color
+          if [ -f tfplan ]; then
+            echo "tfplan_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "tfplan_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload Terraform Plan
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.WORKING_DIRECTORY }}/tfplan
+          retention-days: 1
+
+      - name: Comment PR with Plan
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const planOutput = '${{ steps.plan.outputs.stdout }}';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## Terraform Plan\n\`\`\`\n${planOutput}\n\`\`\``
+            });
+
+  terraform-apply:
+    environment: dev
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init
+        # working-directory: ${{ env.WORKING_DIRECTORY }}
+        # run: |
+        #   terraform init \
+        #     -backend-config="resource_group_name=${{ secrets.TERRAFORM_BACKEND_RG }}" \
+        #     -backend-config="storage_account_name=${{ secrets.TERRAFORM_BACKEND_SA }}" \
+        #     -backend-config="container_name=${{ secrets.TERRAFORM_BACKEND_CONTAINER }}" \
+        #     -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}"
+        run: echo "Skipping Terraform Init in apply stage"
+        
+
+      - name: Download Terraform Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: ${{ env.WORKING_DIRECTORY }}
+
+      - name: Terraform Apply
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Output Resource Group Info
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        run: |
+          echo "## Deployment Results" >> $GITHUB_STEP_SUMMARY
+          echo "### Resource Group" >> $GITHUB_STEP_SUMMARY
+          terraform output -no-color >> $GITHUB_STEP_SUMMARY
+
+  # terraform-destroy:
+  #   if: github.event_name == 'workflow_dispatch' && contains(github.ref, 'main')
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+
+  #     - name: Setup Terraform
+  #       uses: hashicorp/setup-terraform@v3
+  #       with:
+  #         terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+  #     - name: Azure Login
+  #       uses: azure/login@v2
+  #       with:
+  #         creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+  #     - name: Terraform Init
+  #       working-directory: ${{ env.WORKING_DIRECTORY }}
+  #       run: |
+  #         terraform init \
+  #           -backend-config="resource_group_name=${{ secrets.TERRAFORM_BACKEND_RG }}" \
+  #           -backend-config="storage_account_name=${{ secrets.TERRAFORM_BACKEND_SA }}" \
+  #           -backend-config="container_name=${{ secrets.TERRAFORM_BACKEND_CONTAINER }}" \
+  #           -backend-config="key=${{ secrets.TERRAFORM_BACKEND_KEY }}"
+
+  #     - name: Terraform Destroy
+  #       working-directory: ${{ env.WORKING_DIRECTORY }}
+  #       run: terraform destroy -var-file="dev.tfvars" -auto-approve
